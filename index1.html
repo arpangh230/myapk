@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>বাবার অনুষ্ঠানের ডেটা</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tiro+Bangla&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --bg:#F7F5F0;
+    --surface:#FFFFFF;
+    --surface-2:#F0EDE5;
+    --border:#E1DCCF;
+    --text:#2C332E;
+    --text-muted:#6B7268;
+    --accent:#4A6B5A;
+    --accent-dark:#38513F;
+    --accent-soft:#E3EBE4;
+    --gold:#B08D57;
+    --gold-soft:#F3EAD8;
+    --danger:#B0554A;
+    --danger-soft:#F4E4E1;
+    --shadow: 0 1px 2px rgba(44,51,46,0.06), 0 4px 16px rgba(44,51,46,0.06);
+    --radius: 16px;
+  }
+  [data-theme="dark"]{
+    --bg:#12140F;
+    --surface:#1C1F19;
+    --surface-2:#242820;
+    --border:#333830;
+    --text:#EAE7DE;
+    --text-muted:#9A9A8E;
+    --accent:#7FA08C;
+    --accent-dark:#9FBBAA;
+    --accent-soft:#213027;
+    --gold:#CBA96E;
+    --gold-soft:#2E271A;
+    --danger:#D0847A;
+    --danger-soft:#33221F;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.35);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:'Hind Siliguri', sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease, color .25s ease;
+    padding-bottom:40px;
+  }
+  .display{font-family:'Tiro Bangla', serif;}
+
+  /* ---------- Auth Screen ---------- */
+  #authScreen{
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:20px;
+  }
+  .auth-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:20px; padding:32px 24px; max-width:400px; width:100%;
+    box-shadow:var(--shadow);
+  }
+  .auth-card .brand{text-align:center; margin-bottom:24px;}
+  .auth-card .brand svg{width:48px;height:48px;color:var(--accent);}
+  .auth-card .brand h1{font-size:1.3rem; margin-top:8px;}
+  .auth-card .brand p{font-size:.8rem; color:var(--text-muted); margin-top:2px;}
+  .auth-toggle{text-align:center; font-size:.85rem; margin-bottom:18px;}
+  .auth-toggle a{color:var(--accent); cursor:pointer; font-weight:600;}
+  .auth-toggle a:hover{color:var(--accent-dark);}
+  .auth-form .field{margin-bottom:14px;}
+  .auth-form .field label{font-size:.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;}
+  .auth-form .field input{width:100%;}
+  .auth-form .btn{width:100%; margin-top:6px;}
+  .auth-error{color:var(--danger); font-size:.82rem; margin-top:8px; text-align:center; display:none;}
+
+  /* ---------- Header ---------- */
+  #appScreen{display:none;}
+  header.app-header{
+    position:sticky; top:0; z-index:40;
+    background:linear-gradient(180deg, var(--bg) 0%, var(--bg) 85%, transparent);
+    backdrop-filter: blur(6px);
+    padding:18px 16px 10px;
+  }
+  .header-row{
+    display:flex; align-items:center; justify-content:space-between;
+    max-width:960px; margin:0 auto;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand svg{width:30px; height:30px; flex-shrink:0;}
+  .brand h1{font-size:1.25rem; font-weight:700; letter-spacing:.2px;}
+  .brand p{font-size:.72rem; color:var(--text-muted); margin-top:1px;}
+  .header-right{display:flex; align-items:center; gap:8px;}
+  .user-badge{font-size:.78rem; color:var(--text-muted); background:var(--surface-2); padding:4px 10px; border-radius:20px;}
+  .theme-toggle{
+    width:36px; height:36px; border-radius:50%;
+    background:var(--surface); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; box-shadow:var(--shadow);
+    color:var(--text);
+  }
+  .theme-toggle svg{width:16px;height:16px;}
+  .logout-btn{
+    background:var(--danger-soft); color:var(--danger); border:none;
+    padding:6px 12px; border-radius:9px; font-family:'Hind Siliguri',sans-serif;
+    font-size:.78rem; font-weight:600; cursor:pointer;
+  }
+
+  main{max-width:960px; margin:0 auto; padding:0 16px;}
+
+  /* ---------- Dashboard ---------- */
+  .dash-grid{
+    display:grid; grid-template-columns:repeat(2,1fr); gap:10px;
+    margin-top:14px;
+  }
+  @media(min-width:640px){ .dash-grid{grid-template-columns:repeat(4,1fr);} }
+  .dash-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:14px 16px;
+    box-shadow:var(--shadow);
+    position:relative; overflow:hidden;
+  }
+  .dash-card .label{font-size:.72rem; color:var(--text-muted); font-weight:600;}
+  .dash-card .value{font-family:'Tiro Bangla',serif; font-size:1.5rem; margin-top:4px; color:var(--accent-dark);}
+  .dash-card.today .value{color:var(--gold);}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{
+    display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; align-items:center;
+  }
+  .search-wrap{
+    flex:1 1 200px; position:relative; display:flex; align-items:center;
+  }
+  .search-wrap svg{position:absolute; left:12px; width:16px; height:16px; color:var(--text-muted);}
+  input[type="text"], input[type="search"], input[type="email"], input[type="password"], select, input[type="date"], input[type="time"], input[type="number"], textarea{
+    font-family:'Hind Siliguri', sans-serif;
+    background:var(--surface); color:var(--text);
+    border:1px solid var(--border); border-radius:12px;
+    padding:10px 12px; font-size:.92rem; width:100%;
+    outline:none;
+  }
+  .search-wrap input{padding-left:34px;}
+  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    border:none; border-radius:12px; padding:10px 16px;
+    font-family:'Hind Siliguri', sans-serif; font-weight:600; font-size:.9rem;
+    cursor:pointer; transition:transform .12s ease, opacity .12s ease;
+    white-space:nowrap;
+  }
+  .btn:active{transform:scale(.96);}
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-ghost{background:var(--surface); color:var(--text); border:1px solid var(--border);}
+  .btn-gold{background:var(--gold); color:#fff;}
+  .btn-danger-outline{background:var(--danger-soft); color:var(--danger); border:1px solid transparent;}
+  .btn-sm{padding:6px 10px; font-size:.8rem; border-radius:9px;}
+  .btn svg{width:16px; height:16px;}
+
+  .filters{
+    display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;
+  }
+  .filters select, .filters input[type=date]{width:auto; min-width:130px; flex:1 1 130px;}
+
+  /* ---------- Category Manager ---------- */
+  .cat-mgr-toggle{margin-top:8px;}
+  .cat-mgr{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:14px; margin-top:8px; display:none;
+  }
+  .cat-mgr.open{display:block;}
+  .cat-mgr-grid{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;}
+  .cat-mgr-chip{
+    display:inline-flex; align-items:center; gap:4px;
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:20px; padding:4px 12px 4px 14px;
+    font-size:.82rem;
+  }
+  .cat-mgr-chip .del-cat{
+    width:18px;height:18px;border-radius:50%;border:none;
+    background:transparent;color:var(--text-muted);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;
+  }
+  .cat-mgr-chip .del-cat:hover{color:var(--danger);}
+  .cat-mgr-add{display:flex; gap:6px;}
+  .cat-mgr-add input{flex:1;}
+  .cat-mgr-add .btn{padding:8px 14px;}
+
+  /* ---------- List ---------- */
+  .section-title{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:22px; margin-bottom:10px;
+  }
+  .section-title h2{font-family:'Tiro Bangla',serif; font-size:1.05rem; color:var(--accent-dark);}
+  .entry-count{font-size:.78rem; color:var(--text-muted);}
+
+  .person-group{margin-bottom:12px;}
+  .person-group-header{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:12px 14px;
+    display:flex; align-items:center; gap:12px;
+    box-shadow:var(--shadow); cursor:pointer;
+  }
+  .person-avatar{
+    width:42px; height:42px; border-radius:50%; flex-shrink:0;
+    background:var(--accent-soft); color:var(--accent-dark);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-family:'Tiro Bangla',serif; font-size:1.05rem;
+  }
+  .person-info{flex:1; min-width:0;}
+  .person-info .name{font-weight:700; font-size:.96rem;}
+  .person-info .relation{font-size:.74rem; color:var(--text-muted); background:var(--surface-2); padding:1px 8px; border-radius:20px;}
+  .person-info .meta{font-size:.78rem; color:var(--text-muted); margin-top:2px;}
+  .person-total{font-family:'Tiro Bangla',serif; font-weight:700; color:var(--accent-dark); font-size:1rem; white-space:nowrap;}
+  .person-toggle{color:var(--text-muted); transition:transform .2s;}
+  .person-toggle.open{transform:rotate(180deg);}
+
+  .person-entries{display:none; flex-direction:column; gap:4px; margin-top:4px; margin-left:12px; border-left:2px solid var(--border); padding-left:12px;}
+  .person-entries.open{display:flex;}
+  .entry-card{
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:12px; padding:10px 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .entry-main{flex:1; min-width:0;}
+  .entry-main .item-name{font-weight:600; font-size:.88rem;}
+  .entry-main .meta{font-size:.76rem; color:var(--text-muted); margin-top:1px; display:flex; gap:6px; flex-wrap:wrap;}
+  .entry-main .meta .cat-badge{
+    background:var(--accent-soft); color:var(--accent-dark);
+    padding:0 7px; border-radius:10px; font-size:.72rem;
+  }
+  .entry-amount{font-family:'Tiro Bangla',serif; font-weight:700; color:var(--accent-dark); font-size:.92rem; white-space:nowrap;}
+  .entry-actions{display:flex; gap:4px;}
+  .icon-btn{
+    width:30px; height:30px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--text-muted);
+  }
+  .icon-btn svg{width:14px; height:14px;}
+  .icon-btn.danger:hover{color:var(--danger); border-color:var(--danger);}
+  .icon-btn:hover{color:var(--accent); border-color:var(--accent);}
+
+  .empty-state{
+    text-align:center; padding:50px 20px; color:var(--text-muted);
+  }
+  .empty-state svg{width:56px;height:56px; opacity:.35; margin-bottom:10px;}
+  .empty-state p{font-size:.9rem;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(20,22,18,.45);
+    display:flex; align-items:flex-end; justify-content:center;
+    z-index:100; opacity:0; pointer-events:none; transition:opacity .2s ease;
+  }
+  .overlay.open{opacity:1; pointer-events:auto;}
+  @media(min-width:640px){ .overlay{align-items:center;} }
+  .modal{
+    background:var(--surface); width:100%; max-width:520px;
+    border-radius:20px 20px 0 0; padding:20px; max-height:90vh; overflow-y:auto;
+    transform:translateY(30px); transition:transform .25s ease;
+    box-shadow:0 -8px 30px rgba(0,0,0,.15);
+  }
+  @media(min-width:640px){ .modal{border-radius:20px; transform:translateY(10px);} }
+  .overlay.open .modal{transform:translateY(0);}
+  .modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .modal-head h3{font-family:'Tiro Bangla',serif; font-size:1.15rem;}
+  .close-btn{width:32px;height:32px;border-radius:50%;border:none;background:var(--surface-2);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);}
+  .close-btn svg{width:16px;height:16px;}
+
+  .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .form-grid .full{grid-column:1/-1;}
+  .field label{font-size:.78rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;}
+  .field{margin-bottom:2px;}
+  .cat-grid{
+    display:flex; flex-wrap:wrap; gap:6px; grid-column:1/-1;
+  }
+  .cat-chip{
+    border:1px solid var(--border); border-radius:12px; padding:8px 14px;
+    font-size:.82rem; cursor:pointer; background:var(--surface);
+    text-align:center;
+  }
+  .cat-chip.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-dark); font-weight:700;}
+  .modal-actions{display:flex; gap:8px; margin-top:16px;}
+  .modal-actions .btn{flex:1;}
+
+  /* details modal */
+  .detail-row{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--border); font-size:.9rem;}
+  .detail-row span:first-child{color:var(--text-muted);}
+  .detail-row span:last-child{font-weight:600; text-align:right;}
+
+  /* report */
+  .report-summary{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
+  .report-card{background:var(--surface-2); border-radius:12px; padding:12px;}
+  .report-card .label{font-size:.72rem;color:var(--text-muted);}
+  .report-card .value{font-family:'Tiro Bangla',serif; font-size:1.2rem; margin-top:3px;}
+  .cat-bar-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:.85rem;}
+  .cat-bar-row .cat-name{width:70px; flex-shrink:0;}
+  .cat-bar-track{flex:1; height:8px; background:var(--surface-2); border-radius:6px; overflow:hidden;}
+  .cat-bar-fill{height:100%; background:var(--accent);}
+  .cat-bar-row .cat-count{width:34px; text-align:right; color:var(--text-muted); flex-shrink:0;}
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--accent-dark); color:#fff; padding:10px 18px; border-radius:12px;
+    font-size:.85rem; opacity:0; pointer-events:none; transition:all .25s ease; z-index:200;
+    box-shadow:var(--shadow);
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  .fab{
+    position:fixed; right:18px; bottom:18px; z-index:50;
+    width:56px; height:56px; border-radius:50%; background:var(--accent); color:#fff;
+    border:none; box-shadow:0 6px 20px rgba(74,107,90,.4); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fab svg{width:24px;height:24px;}
+  @media(min-width:640px){ .fab{display:none;} }
+  .add-btn-desktop{display:none;}
+  @media(min-width:640px){ .add-btn-desktop{display:inline-flex;} }
+
+  @media print{
+    header, #authScreen, .toolbar, .filters, .fab, .add-btn-desktop, .entry-actions, .icon-btn, .theme-toggle, .logout-btn, .cat-mgr-toggle, .cat-mgr{display:none !important;}
+    body{background:#fff; color:#000;}
+    .modal{box-shadow:none;}
+  }
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:8px;}
+</style>
+</head>
+<body>
+
+<!-- ======================== AUTH SCREEN ======================== -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--accent)">
+        <path d="M12 3c-2 3-5 5-5 9a5 5 0 0010 0c0-4-3-6-5-9z"/>
+        <path d="M12 12v8"/>
+      </svg>
+      <h1 class="display">বাবার অনুষ্ঠানের ডেটা</h1>
+      <p>সহায়তার হিসাব ও রেকর্ড</p>
+    </div>
+    <div class="auth-toggle">
+      <span id="authToggleText">নতুন ব্যবহারকারী?</span>
+      <a id="authToggleLink">রেজিস্টার করুন</a>
+    </div>
+    <form class="auth-form" id="authForm">
+      <div id="authNameField" class="field" style="display:none;">
+        <label>আপনার নাম</label>
+        <input type="text" id="authName" placeholder="আপনার নাম লিখুন">
+      </div>
+      <div class="field">
+        <label>ইমেইল</label>
+        <input type="email" id="authEmail" required placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>পাসওয়ার্ড</label>
+        <input type="password" id="authPassword" required placeholder="পাসওয়ার্ড (ন্যূনতম ৬ অক্ষর)">
+      </div>
+      <div class="auth-error" id="authError"></div>
+      <button type="submit" class="btn btn-primary" id="authSubmitBtn">লগইন করুন</button>
+      <button type="button" class="btn btn-ghost" id="authForgotBtn" style="margin-top:8px; width:100%; font-size:.8rem;">পাসওয়ার্ড ভুলে গেছেন?</button>
+    </form>
+  </div>
+</div>
+
+<!-- ======================== APP SCREEN ======================== -->
+<div id="appScreen">
+
+<header class="app-header">
+  <div class="header-row">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--accent)">
+        <path d="M12 3c-2 3-5 5-5 9a5 5 0 0010 0c0-4-3-6-5-9z"/>
+        <path d="M12 12v8"/>
+      </svg>
+      <div>
+        <h1 class="display">বাবার অনুষ্ঠানের ডেটা</h1>
+        <p>সহায়তার হিসাব ও রেকর্ড</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="user-badge" id="userBadge"></span>
+      <button class="theme-toggle" id="themeToggle" title="থিম পরিবর্তন">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
+      </button>
+      <button class="logout-btn" id="logoutBtn">লগআউট</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Dashboard -->
+  <section class="dash-grid">
+    <div class="dash-card">
+      <div class="label">মোট ব্যক্তি</div>
+      <div class="value" id="statTotalPersons">০</div>
+    </div>
+    <div class="dash-card">
+      <div class="label">মোট এন্ট্রি</div>
+      <div class="value" id="statTotalEntries">০</div>
+    </div>
+    <div class="dash-card">
+      <div class="label">মোট টাকা</div>
+      <div class="value" id="statTotalMoney">৳০</div>
+    </div>
+    <div class="dash-card today">
+      <div class="label">আজকের এন্ট্রি</div>
+      <div class="value" id="statToday">০</div>
+    </div>
+  </section>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" id="searchInput" placeholder="নাম দিয়ে খুঁজুন...">
+    </div>
+    <button class="btn btn-primary add-btn-desktop" id="addBtnDesktop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      নতুন এন্ট্রি
+    </button>
+    <button class="btn btn-ghost" id="reportBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-4"/><path d="M9 15L21 3M21 3h-6M21 3v6"/></svg>
+      রিপোর্ট
+    </button>
+  </div>
+  <div class="filters">
+    <select id="filterCategory"><option value="">সব ক্যাটাগরি</option></select>
+    <input type="date" id="filterDate">
+    <button class="btn btn-ghost btn-sm" id="clearFilters">রিসেট</button>
+  </div>
+
+  <!-- Category Manager Toggle -->
+  <button class="btn btn-ghost btn-sm cat-mgr-toggle" id="catMgrToggle">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+    ক্যাটাগরি ম্যানেজ করুন
+  </button>
+  <div class="cat-mgr" id="catMgr">
+    <div class="cat-mgr-grid" id="catMgrList"></div>
+    <div class="cat-mgr-add">
+      <input type="text" id="catMgrInput" placeholder="নতুন ক্যাটাগরি নাম">
+      <button class="btn btn-primary btn-sm" id="catMgrAddBtn">যোগ করুন</button>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="section-title">
+    <h2>সকল ব্যক্তি ও এন্ট্রি</h2>
+    <span class="entry-count" id="entryCountLabel">০ টি রেকর্ড</span>
+  </div>
+  <div class="entry-list" id="entryList"></div>
+  <div class="empty-state" id="emptyState" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3c-2 3-5 5-5 9a5 5 0 0010 0c0-4-3-6-5-9z"/></svg>
+    <p>এখনো কোনো এন্ট্রি যোগ করা হয়নি।<br>নতুন এন্ট্রি যোগ করতে নিচের বাটনে চাপুন।</p>
+  </div>
+</main>
+
+<button class="fab" id="addBtnMobile">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<!-- ======================== ADD/EDIT ENTRY MODAL ======================== -->
+<div class="overlay" id="entryOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="entryModalTitle">নতুন এন্ট্রি</h3>
+      <button class="close-btn" id="closeEntryModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <form id="entryForm">
+      <input type="hidden" id="entryId">
+      <div class="form-grid">
+        <div class="field full">
+          <label>ব্যক্তির নাম *</label>
+          <input type="text" id="fPersonName" required placeholder="নাম লিখুন বা বাছাই করুন" list="personList">
+          <datalist id="personList"></datalist>
+        </div>
+        <div class="field full">
+          <label>সম্পর্ক (ঐচ্ছিক)</label>
+          <input type="text" id="fRelation" placeholder="যেমন: প্রতিবেশী, চাচাতো ভাই">
+        </div>
+        <div class="field full">
+          <label>কী দিয়েছেন *</label>
+          <input type="text" id="fItem" required placeholder="যেমন: নগদ টাকা, ৫ কেজি চাল">
+        </div>
+        <div class="field full">
+          <label>ক্যাটাগরি *</label>
+          <div class="cat-grid" id="catGrid"></div>
+        </div>
+        <div class="field">
+          <label>পরিমাণ *</label>
+          <input type="number" id="fAmount" step="any" required placeholder="০">
+        </div>
+        <div class="field">
+          <label>একক *</label>
+          <select id="fUnit">
+            <option value="টাকা">টাকা</option>
+            <option value="কেজি">কেজি</option>
+            <option value="লিটার">লিটার</option>
+            <option value="পিস">পিস</option>
+            <option value="বস্তা">বস্তা</option>
+            <option value="custom">কাস্টম...</option>
+          </select>
+        </div>
+        <div class="field full" id="customUnitWrap" style="display:none;">
+          <label>কাস্টম একক</label>
+          <input type="text" id="fCustomUnit" placeholder="একক লিখুন">
+        </div>
+        <div class="field">
+          <label>তারিখ *</label>
+          <input type="date" id="fDate" required>
+        </div>
+        <div class="field">
+          <label>সময়</label>
+          <input type="time" id="fTime">
+        </div>
+        <div class="field full">
+          <label>বিবরণ (ঐচ্ছিক)</label>
+          <textarea id="fDesc" rows="2" placeholder="অতিরিক্ত তথ্য..."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancelEntry">বাতিল</button>
+        <button type="submit" class="btn btn-primary">সংরক্ষণ করুন</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ======================== PERSON DETAILS MODAL ======================== -->
+<div class="overlay" id="personOverlay">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-head">
+      <h3 id="personModalTitle">ব্যক্তির তথ্য</h3>
+      <button class="close-btn" id="closePersonModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="personBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="personAddEntryBtn">নতুন এন্ট্রি যোগ করুন</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== ENTRY DETAILS MODAL ======================== -->
+<div class="overlay" id="detailsOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>এন্ট্রি বিস্তারিত</h3>
+      <button class="close-btn" id="closeDetailsModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="detailsBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="detailsEditBtn">এডিট করুন</button>
+      <button class="btn btn-danger-outline" id="detailsDeleteBtn">ডিলিট করুন</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== REPORT MODAL ======================== -->
+<div class="overlay" id="reportOverlay">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-head">
+      <h3>রিপোর্ট</h3>
+      <button class="close-btn" id="closeReportModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="reportBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="printReportBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
+        প্রিন্ট
+      </button>
+      <button class="btn btn-gold" id="pdfReportBtn">PDF এক্সপোর্ট</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   FIREBASE INIT
+========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyBq2YYbFnZEGbMv8RJOy5ue3h_Kz6bTPIY",
+  authDomain: "quotexsingelbot.firebaseapp.com",
+  projectId: "quotexsingelbot",
+  storageBucket: "quotexsingelbot.firebasestorage.app",
+  messagingSenderId: "962892714582",
+  appId: "1:962892714582:web:8ad8d67613d19604f7a1f7",
+  measurementId: "G-L030ERTPXT"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+/* =========================================================
+   STATE
+========================================================= */
+let currentUser = null;
+let entries = [];
+let persons = [];
+let categories = [];
+let selectedCategory = null;
+let editingEntryId = null;
+let editingPersonId = null;
+let currentFilter = { search:'', category:'', date:'' };
+
+/* Collection refs (per-user filtering happens in queries) */
+const categoriesCol = db.collection('categories');
+const personsCol = db.collection('persons');
+const entriesCol = db.collection('entries');
+
+/* =========================================================
+   AUTH
+========================================================= */
+let isRegisterMode = false;
+
+auth.onAuthStateChanged(user => {
+  currentUser = user;
+  if(user){
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    document.getElementById('userBadge').textContent = user.email;
+    initApp();
+  } else {
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('appScreen').style.display = 'none';
+  }
+});
+
+document.getElementById('authToggleLink').addEventListener('click', toggleAuthMode);
+document.getElementById('authForm').addEventListener('submit', handleAuth);
+document.getElementById('authForgotBtn').addEventListener('click', handleForgotPassword);
+
+function toggleAuthMode(){
+  isRegisterMode = !isRegisterMode;
+  document.getElementById('authToggleText').textContent = isRegisterMode ? 'ইতিমধ্যে অ্যাকাউন্ট আছে?' : 'নতুন ব্যবহারকারী?';
+  document.getElementById('authToggleLink').textContent = isRegisterMode ? 'লগইন করুন' : 'রেজিস্টার করুন';
+  document.getElementById('authNameField').style.display = isRegisterMode ? 'block' : 'none';
+  document.getElementById('authSubmitBtn').textContent = isRegisterMode ? 'রেজিস্টার করুন' : 'লগইন করুন';
+  document.getElementById('authError').style.display = 'none';
+}
+
+function showAuthError(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function handleAuth(e){
+  e.preventDefault();
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const name = document.getElementById('authName').value.trim();
+  document.getElementById('authError').style.display = 'none';
+
+  try {
+    if(isRegisterMode){
+      if(password.length < 6){ showAuthError('পাসওয়ার্ড কমপক্ষে ৬ অক্ষর হতে হবে'); return; }
+      await auth.createUserWithEmailAndPassword(email, password);
+      if(name) await currentUser.updateProfile({ displayName: name });
+      showToast('রেজিস্ট্রেশন সফল হয়েছে');
+    } else {
+      await auth.signInWithEmailAndPassword(email, password);
+      showToast('লগইন সফল হয়েছে');
+    }
+  } catch(err){
+    const msgs = {
+      'auth/user-not-found': 'এই ইমেইলের অ্যাকাউন্ট নেই',
+      'auth/wrong-password': 'পাসওয়ার্ড ভুল',
+      'auth/invalid-credential': 'ইমেইল বা পাসওয়ার্ড ভুল',
+      'auth/email-already-in-use': 'এই ইমেইল ইতিমধ্যে ব্যবহৃত',
+      'auth/weak-password': 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষর হতে হবে',
+      'auth/too-many-requests': 'অনেকবার ব্যর্থ, কিছুক্ষণ পর আবার চেষ্টা করুন',
+    };
+    showAuthError(msgs[err.code] || err.message);
+  }
+}
+
+async function handleForgotPassword(){
+  const email = document.getElementById('authEmail').value.trim();
+  if(!email){ showAuthError('প্রথমে আপনার ইমেইল লিখুন'); return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    showToast('পাসওয়ার্ড রিসেট লিংক ইমেইলে পাঠানো হয়েছে');
+  } catch(err){
+    showAuthError(err.message);
+  }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  auth.signOut();
+  showToast('লগআউট করা হয়েছে');
+});
+
+/* =========================================================
+   APP INIT (runs after auth)
+========================================================= */
+async function initApp(){
+  applyTheme(localStorage.getItem('memorial_theme') || 'light');
+  bindEvents();
+  await Promise.all([loadCategories(), loadPersons(), loadEntries()]);
+  render();
+  liveListen();
+}
+
+function liveListen(){
+  entriesCol.where('userId','==',currentUser.uid).orderBy('dateTime','desc').onSnapshot(
+    snap => { entries = snap.docs.map(d=>({ id:d.id, ...d.data() })); render(); },
+    err => { console.error('Firestore sync error:', err); showToast('সিঙ্ক সমস্যা হয়েছে'); }
+  );
+  categoriesCol.where('userId','==',currentUser.uid).onSnapshot(
+    snap => { categories = snap.docs.map(d=>({ id:d.id, ...d.data() })); render(); },
+    err => console.error('categories sync error:', err)
+  );
+  personsCol.where('userId','==',currentUser.uid).orderBy('name').onSnapshot(
+    snap => { persons = snap.docs.map(d=>({ id:d.id, ...d.data() })); render(); },
+    err => console.error('persons sync error:', err)
+  );
+}
+
+async function loadCategories(){
+  const snap = await categoriesCol.where('userId','==',currentUser.uid).get();
+  categories = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  if(categories.length === 0){
+    const defaults = ['টাকা','ফল','দুধ','চাল','ডাল','সবজি','মাংস','অন্যান্য'];
+    const batch = db.batch();
+    defaults.forEach(name => {
+      const ref = categoriesCol.doc();
+      batch.set(ref, { name, userId: currentUser.uid });
+    });
+    await batch.commit();
+    const snap2 = await categoriesCol.where('userId','==',currentUser.uid).get();
+    categories = snap2.docs.map(d=>({ id:d.id, ...d.data() }));
+  }
+}
+
+async function loadPersons(){
+  const snap = await personsCol.where('userId','==',currentUser.uid).orderBy('name').get();
+  persons = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+}
+
+async function loadEntries(){
+  const snap = await entriesCol.where('userId','==',currentUser.uid).orderBy('dateTime','desc').get();
+  entries = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+}
+
+/* =========================================================
+   CATEGORY MANAGEMENT
+========================================================= */
+function getCategoryName(catId){
+  const c = categories.find(x=>x.id===catId);
+  return c ? c.name : catId;
+}
+
+document.getElementById('catMgrToggle').addEventListener('click', ()=>{
+  document.getElementById('catMgr').classList.toggle('open');
+});
+
+document.getElementById('catMgrAddBtn').addEventListener('click', async ()=>{
+  const input = document.getElementById('catMgrInput');
+  const name = input.value.trim();
+  if(!name){ showToast('ক্যাটাগরি নাম লিখুন'); return; }
+  if(categories.some(c=>c.name===name)){ showToast('এই ক্যাটাগরি ইতিমধ্যে আছে'); return; }
+  try {
+    await categoriesCol.add({ name, userId: currentUser.uid });
+    input.value = '';
+    showToast('ক্যাটাগরি যোগ করা হয়েছে');
+  } catch(err){ showToast('ব্যর্থ হয়েছে'); }
+});
+
+async function deleteCategory(id){
+  const inUse = entries.some(e => e.category === getCategoryName(id));
+  if(inUse){ showToast('এই ক্যাটাগরি ব্যবহার হচ্ছে, মুছে ফেলা যাবে না'); return; }
+  if(!confirm('ক্যাটাগরি ডিলিট করবেন?')) return;
+  try {
+    await categoriesCol.doc(id).delete();
+    showToast('ক্যাটাগরি ডিলিট হয়েছে');
+  } catch(err){ showToast('ব্যর্থ হয়েছে'); }
+}
+
+/* =========================================================
+   PERSON HELPERS
+========================================================= */
+async function getOrCreatePerson(name, relation){
+  name = name.trim();
+  if(!name) return null;
+  const existing = persons.find(p => p.name.toLowerCase() === name.toLowerCase());
+  if(existing) return existing.id;
+  const ref = await personsCol.add({ name, relation: relation||'', userId: currentUser.uid });
+  return ref.id;
+}
+
+function getPersonById(id){
+  return persons.find(p=>p.id===id);
+}
+
+/* =========================================================
+   RENDER
+========================================================= */
+function toBnNumber(n){
+  const map = {'0':'০','1':'১','2':'২','3':'৩','4':'৪','5':'৫','6':'৬','7':'৭','8':'৮','9':'৯'};
+  return n.toString().replace(/[0-9]/g, d=>map[d]);
+}
+function escapeHtml(str){
+  if(!str) return '';
+  return str.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatAmount(entry){
+  return `${toBnNumber(entry.amount)} ${entry.unit}`;
+}
+
+function getFiltered(){
+  return entries.filter(e=>{
+    const p = getPersonById(e.personId);
+    const name = p ? p.name : '';
+    if(currentFilter.search && !name.toLowerCase().includes(currentFilter.search.toLowerCase())) return false;
+    if(currentFilter.category && e.category !== currentFilter.category) return false;
+    if(currentFilter.date && e.dateTime){
+      const d = e.dateTime.slice(0,10);
+      if(d !== currentFilter.date) return false;
+    }
+    return true;
+  });
+}
+
+function render(){
+  const filtered = getFiltered();
+  const container = document.getElementById('entryList');
+  const empty = document.getElementById('emptyState');
+  container.innerHTML = '';
+
+  // Build person groups from filtered entries
+  const personMap = {};
+  filtered.forEach(e => {
+    const pid = e.personId || 'unknown';
+    if(!personMap[pid]) personMap[pid] = { person: getPersonById(pid), entries: [] };
+    personMap[pid].entries.push(e);
+  });
+
+  const personIds = Object.keys(personMap);
+  if(personIds.length === 0){
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    personIds.forEach(pid => {
+      const group = personMap[pid];
+      const p = group.person;
+      const entries = group.entries;
+      const totalMoney = entries.filter(e=>e.category==='টাকা').reduce((s,e)=>s+Number(e.amount),0);
+      const totalAmount = entries.reduce((s,e)=>s+Number(e.amount||0),0);
+      const name = p ? p.name : 'অজানা';
+      const relation = p ? (p.relation||'') : '';
+      const initial = name.charAt(0);
+
+      const personDiv = document.createElement('div');
+      personDiv.className = 'person-group';
+
+      let entriesHtml = '';
+      entries.forEach(entry => {
+        const dt = entry.dateTime ? new Date(entry.dateTime) : null;
+        const dateStr = dt ? dt.toLocaleDateString('bn-BD') : '';
+        entriesHtml += `
+          <div class="entry-card" data-eid="${entry.id}">
+            <div class="entry-main">
+              <div class="item-name">${escapeHtml(entry.item)}</div>
+              <div class="meta">
+                <span class="cat-badge">${escapeHtml(entry.category||'')}</span>
+                <span>${dateStr}</span>
+              </div>
+            </div>
+            <div class="entry-amount">${formatAmount(entry)}</div>
+            <div class="entry-actions">
+              <button class="icon-btn e-edit" title="এডিট"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></svg></button>
+              <button class="icon-btn danger e-del" title="ডিলিট"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6z"/></svg></button>
+            </div>
+          </div>`;
+      });
+
+      personDiv.innerHTML = `
+        <div class="person-group-header" data-pid="${pid}">
+          <div class="person-avatar">${escapeHtml(initial)}</div>
+          <div class="person-info">
+            <div class="name-row" style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+              <span class="name">${escapeHtml(name)}</span>
+              ${relation ? `<span class="relation">${escapeHtml(relation)}</span>` : ''}
+            </div>
+            <div class="meta">${toBnNumber(entries.length)} টি এন্ট্রি</div>
+          </div>
+          <div class="person-total">${totalMoney > 0 ? '৳'+toBnNumber(totalMoney) : formatAmount(entries[entries.length-1])}</div>
+          <svg class="person-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="person-entries">${entriesHtml}</div>
+      `;
+
+      container.appendChild(personDiv);
+    });
+
+    // Person toggle
+    container.querySelectorAll('.person-group-header').forEach(hdr => {
+      hdr.addEventListener('click', (e) => {
+        if(e.target.closest('.e-edit') || e.target.closest('.e-del')) return;
+        const entriesDiv = hdr.nextElementSibling;
+        entriesDiv.classList.toggle('open');
+        hdr.querySelector('.person-toggle').classList.toggle('open');
+      });
+    });
+
+    // Open first person by default
+    const first = container.querySelector('.person-entries');
+    if(first){ first.classList.add('open'); first.previousElementSibling.querySelector('.person-toggle').classList.add('open'); }
+
+    // Entry edit/detail/delete
+    container.querySelectorAll('.entry-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if(e.target.closest('.e-edit')) return;
+        if(e.target.closest('.e-del')) return;
+        const eid = card.dataset.eid;
+        const entry = entries.find(x=>x.id===eid);
+        if(entry) openDetailsModal(entry);
+      });
+    });
+    container.querySelectorAll('.e-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.entry-card');
+        const entry = entries.find(x=>x.id===card.dataset.eid);
+        if(entry) openEntryModal(entry);
+      });
+    });
+    container.querySelectorAll('.e-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.entry-card');
+        deleteEntry(card.dataset.eid);
+      });
+    });
+  }
+
+  document.getElementById('entryCountLabel').textContent = `${toBnNumber(filtered.length)} টি রেকর্ড`;
+  updateStats();
+}
+
+function updateStats(){
+  const today = new Date().toISOString().slice(0,10);
+  let totalMoney = 0, todayCount = 0;
+  const uniquePersons = new Set();
+  entries.forEach(e => {
+    if(e.category === 'টাকা') totalMoney += Number(e.amount);
+    if(e.personId) uniquePersons.add(e.personId);
+    if(e.dateTime && e.dateTime.slice(0,10) === today) todayCount++;
+  });
+  document.getElementById('statTotalPersons').textContent = toBnNumber(uniquePersons.size);
+  document.getElementById('statTotalEntries').textContent = toBnNumber(entries.length);
+  document.getElementById('statTotalMoney').textContent = '৳' + toBnNumber(Math.round(totalMoney).toLocaleString('en-IN'));
+  document.getElementById('statToday').textContent = toBnNumber(todayCount);
+}
+
+/* =========================================================
+   ENTRY MODAL
+========================================================= */
+function openEntryModal(entry=null){
+  editingEntryId = entry ? entry.id : null;
+  document.getElementById('entryModalTitle').textContent = entry ? 'এন্ট্রি এডিট করুন' : 'নতুন এন্ট্রি';
+  document.getElementById('entryId').value = entry ? entry.id : '';
+
+  // Person data
+  let person = entry ? getPersonById(entry.personId) : null;
+  document.getElementById('fPersonName').value = person ? person.name : '';
+  document.getElementById('fRelation').value = person ? (person.relation||'') : '';
+  document.getElementById('fItem').value = entry ? entry.item : '';
+  document.getElementById('fAmount').value = entry ? entry.amount : '';
+  document.getElementById('fDesc').value = entry ? (entry.description||'') : '';
+
+  const knownUnits = ['টাকা','কেজি','লিটার','পিস','বস্তা'];
+  if(entry && !knownUnits.includes(entry.unit)){
+    document.getElementById('fUnit').value = 'custom';
+    document.getElementById('fCustomUnit').value = entry.unit;
+    document.getElementById('customUnitWrap').style.display = 'block';
+  } else {
+    document.getElementById('fUnit').value = entry ? entry.unit : 'টাকা';
+    document.getElementById('fCustomUnit').value = '';
+    document.getElementById('customUnitWrap').style.display = 'none';
+  }
+
+  // Date/time
+  if(entry && entry.dateTime){
+    const d = new Date(entry.dateTime);
+    document.getElementById('fDate').value = d.toISOString().slice(0,10);
+    document.getElementById('fTime').value = d.toTimeString().slice(0,5);
+  } else {
+    const now = new Date();
+    document.getElementById('fDate').value = now.toISOString().slice(0,10);
+    document.getElementById('fTime').value = now.toTimeString().slice(0,5);
+  }
+
+  renderCategoryChips(entry ? entry.category : null);
+  toggleOverlay('entryOverlay', true);
+}
+
+function renderCategoryChips(selectedCatId){
+  const grid = document.getElementById('catGrid');
+  grid.innerHTML = '';
+  categories.forEach(cat => {
+    const chip = document.createElement('div');
+    chip.className = 'cat-chip' + (cat.id === selectedCatId ? ' active' : '');
+    chip.dataset.catId = cat.id;
+    chip.textContent = cat.name;
+    chip.addEventListener('click', ()=>{
+      selectedCategory = cat.id;
+      document.querySelectorAll('#catGrid .cat-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+    grid.appendChild(chip);
+  });
+  selectedCategory = selectedCatId || null;
+}
+
+function closeEntryModal(){ toggleOverlay('entryOverlay', false); }
+document.getElementById('closeEntryModal').addEventListener('click', closeEntryModal);
+document.getElementById('cancelEntry').addEventListener('click', closeEntryModal);
+document.getElementById('entryOverlay').addEventListener('click', e=>{ if(e.target.id==='entryOverlay') closeEntryModal(); });
+
+document.getElementById('fUnit').addEventListener('change', e=>{
+  document.getElementById('customUnitWrap').style.display = e.target.value === 'custom' ? 'block' : 'none';
+});
+
+document.getElementById('entryForm').addEventListener('submit', handleSubmit);
+document.getElementById('addBtnDesktop').addEventListener('click', ()=>openEntryModal());
+document.getElementById('addBtnMobile').addEventListener('click', ()=>openEntryModal());
+
+async function handleSubmit(e){
+  e.preventDefault();
+  if(!selectedCategory){ showToast('একটি ক্যাটাগরি বাছাই করুন'); return; }
+
+  let unit = document.getElementById('fUnit').value;
+  if(unit === 'custom') unit = document.getElementById('fCustomUnit').value.trim() || 'একক';
+
+  const personName = document.getElementById('fPersonName').value.trim();
+  const relation = document.getElementById('fRelation').value.trim();
+  if(!personName){ showToast('ব্যক্তির নাম লিখুন'); return; }
+
+  const dateVal = document.getElementById('fDate').value;
+  const timeVal = document.getElementById('fTime').value || '00:00';
+  const dateTime = new Date(`${dateVal}T${timeVal}:00`).toISOString();
+
+  const cat = categories.find(c=>c.id===selectedCategory);
+
+  const data = {
+    personId: '',
+    item: document.getElementById('fItem').value.trim(),
+    category: cat ? cat.name : selectedCategory,
+    amount: parseFloat(document.getElementById('fAmount').value) || 0,
+    unit,
+    description: document.getElementById('fDesc').value.trim(),
+    dateTime,
+    userId: currentUser.uid,
+  };
+
+  try {
+    if(editingEntryId){
+      // Get current person info
+      const old = entries.find(x=>x.id===editingEntryId);
+      const oldPerson = old ? getPersonById(old.personId) : null;
+      // If name changed, create/get new person
+      data.personId = await getOrCreatePerson(personName, relation);
+      await entriesCol.doc(editingEntryId).update(data);
+      // Clean up old person if no entries left
+      if(oldPerson && old.personId !== data.personId){
+        const remaining = entries.filter(e=>e.personId===old.personId && e.id!==editingEntryId);
+        if(remaining.length === 0) personsCol.doc(old.personId).delete().catch(()=>{});
+      }
+      showToast('এন্ট্রি আপডেট হয়েছে');
+    } else {
+      data.personId = await getOrCreatePerson(personName, relation);
+      await entriesCol.add(data);
+      showToast('নতুন এন্ট্রি যোগ হয়েছে');
+    }
+    closeEntryModal();
+  } catch(err){
+    console.error(err);
+    showToast('সংরক্ষণ ব্যর্থ হয়েছে, আবার চেষ্টা করুন');
+  }
+}
+
+async function deleteEntry(id){
+  if(!confirm('আপনি কি নিশ্চিত এই এন্ট্রিটি ডিলিট করতে চান?')) return;
+  try {
+    const entry = entries.find(x=>x.id===id);
+    await entriesCol.doc(id).delete();
+    if(entry && entry.personId){
+      const remaining = entries.filter(e=>e.personId===entry.personId && e.id!==id);
+      if(remaining.length === 0) personsCol.doc(entry.personId).delete().catch(()=>{});
+    }
+    showToast('এন্ট্রি ডিলিট হয়েছে');
+  } catch(err){
+    showToast('ডিলিট ব্যর্থ হয়েছে');
+  }
+}
+
+/* =========================================================
+   DETAILS MODAL
+========================================================= */
+function openDetailsModal(entry){
+  const body = document.getElementById('detailsBody');
+  const p = getPersonById(entry.personId);
+  const dt = entry.dateTime ? new Date(entry.dateTime) : new Date(entry.createdAt);
+  body.innerHTML = `
+    <div class="detail-row"><span>ব্যক্তি</span><span>${escapeHtml(p ? p.name : 'অজানা')}</span></div>
+    <div class="detail-row"><span>সম্পর্ক</span><span>${escapeHtml(p ? (p.relation||'') : '')||'—'}</span></div>
+    <div class="detail-row"><span>কী দিয়েছেন</span><span>${escapeHtml(entry.item)}</span></div>
+    <div class="detail-row"><span>ক্যাটাগরি</span><span>${escapeHtml(entry.category)}</span></div>
+    <div class="detail-row"><span>পরিমাণ</span><span>${formatAmount(entry)}</span></div>
+    <div class="detail-row"><span>বিবরণ</span><span>${escapeHtml(entry.description)||'—'}</span></div>
+    <div class="detail-row"><span>তারিখ ও সময়</span><span>${dt.toLocaleDateString('bn-BD')} ${dt.toLocaleTimeString('bn-BD',{hour:'2-digit',minute:'2-digit'})}</span></div>
+  `;
+  document.getElementById('detailsEditBtn').onclick = ()=>{
+    toggleOverlay('detailsOverlay', false);
+    openEntryModal(entry);
+  };
+  document.getElementById('detailsDeleteBtn').onclick = ()=>{
+    deleteEntry(entry.id);
+    toggleOverlay('detailsOverlay', false);
+  };
+  toggleOverlay('detailsOverlay', true);
+}
+
+document.getElementById('closeDetailsModal').addEventListener('click', ()=>toggleOverlay('detailsOverlay', false));
+document.getElementById('detailsOverlay').addEventListener('click', e=>{ if(e.target.id==='detailsOverlay') toggleOverlay('detailsOverlay', false); });
+
+/* =========================================================
+   PERSON DETAILS MODAL
+========================================================= */
+document.getElementById('closePersonModal').addEventListener('click', ()=>toggleOverlay('personOverlay', false));
+document.getElementById('personOverlay').addEventListener('click', e=>{ if(e.target.id==='personOverlay') toggleOverlay('personOverlay', false); });
+
+/* =========================================================
+   REPORT
+========================================================= */
+document.getElementById('reportBtn').addEventListener('click', openReportModal);
+document.getElementById('closeReportModal').addEventListener('click', ()=>toggleOverlay('reportOverlay', false));
+document.getElementById('reportOverlay').addEventListener('click', e=>{ if(e.target.id==='reportOverlay') toggleOverlay('reportOverlay', false); });
+document.getElementById('printReportBtn').addEventListener('click', ()=>window.print());
+document.getElementById('pdfReportBtn').addEventListener('click', ()=>{
+  showToast('প্রিন্ট ডায়ালগ থেকে "Save as PDF" নির্বাচন করুন');
+  setTimeout(()=>window.print(), 300);
+});
+
+function openReportModal(){
+  const body = document.getElementById('reportBody');
+  const totalMoney = entries.filter(e=>e.category==='টাকা').reduce((s,e)=>s+Number(e.amount),0);
+  const totalEntries = entries.length;
+  const uniquePersons = new Set(entries.map(e=>e.personId)).size;
+
+  const catCounts = {};
+  categories.forEach(c=>catCounts[c.name]=0);
+  entries.forEach(e=>{ catCounts[e.category] = (catCounts[e.category]||0)+1; });
+  const maxCount = Math.max(1, ...Object.values(catCounts));
+
+  let barsHtml = '';
+  Object.entries(catCounts).forEach(([cat,count])=>{
+    if(count === 0) return;
+    barsHtml += `
+      <div class="cat-bar-row">
+        <span class="cat-name">${escapeHtml(cat)}</span>
+        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(count/maxCount*100)}%"></div></div>
+        <span class="cat-count">${toBnNumber(count)}</span>
+      </div>`;
+  });
+  if(!barsHtml) barsHtml = '<p style="color:var(--text-muted);font-size:.85rem;">কোনো এন্ট্রি নেই।</p>';
+
+  body.innerHTML = `
+    <div class="report-summary">
+      <div class="report-card"><div class="label">মোট ব্যক্তি</div><div class="value">${toBnNumber(uniquePersons)}</div></div>
+      <div class="report-card"><div class="label">মোট এন্ট্রি</div><div class="value">${toBnNumber(totalEntries)}</div></div>
+      <div class="report-card"><div class="label">মোট টাকা</div><div class="value">৳${toBnNumber(Math.round(totalMoney).toLocaleString('en-IN'))}</div></div>
+      <div class="report-card"><div class="label">গড় টাকা/ব্যক্তি</div><div class="value">৳${toBnNumber(Math.round(uniquePersons ? totalMoney/uniquePersons : 0).toLocaleString('en-IN'))}</div></div>
+    </div>
+    <h4 style="font-family:\'Tiro Bangla\',serif; margin-bottom:10px; color:var(--accent-dark);">ক্যাটাগরি অনুযায়ী সংখ্যা</h4>
+    ${barsHtml}
+  `;
+  toggleOverlay('reportOverlay', true);
+}
+
+/* =========================================================
+   THEME
+========================================================= */
+function applyTheme(mode){
+  document.documentElement.setAttribute('data-theme', mode);
+  localStorage.setItem('memorial_theme', mode);
+  const icon = document.getElementById('themeIcon');
+  icon.innerHTML = mode === 'dark'
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+    : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
+}
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const cur = document.documentElement.getAttribute('data-theme');
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+});
+
+/* =========================================================
+   EVENT BINDINGS (shared)
+========================================================= */
+function bindEvents(){
+  document.getElementById('searchInput').addEventListener('input', e=>{
+    currentFilter.search = e.target.value.trim();
+    render();
+  });
+  document.getElementById('filterCategory').addEventListener('change', e=>{
+    currentFilter.category = e.target.value;
+    render();
+  });
+  document.getElementById('filterDate').addEventListener('change', e=>{
+    currentFilter.date = e.target.value;
+    render();
+  });
+  document.getElementById('clearFilters').addEventListener('click', ()=>{
+    currentFilter = { search:'', category:'', date:'' };
+    document.getElementById('searchInput').value='';
+    document.getElementById('filterCategory').value='';
+    document.getElementById('filterDate').value='';
+    render();
+  });
+}
+
+/* =========================================================
+   FILTER DROPDOWN UPDATE (after categories load)
+========================================================= */
+function updateFilterCategoryDropdown(){
+  const sel = document.getElementById('filterCategory');
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">সব ক্যাটাগরি</option>';
+  categories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat.name;
+    opt.textContent = cat.name;
+    sel.appendChild(opt);
+  });
+  sel.value = currentVal;
+}
+
+// Override render to also update dropdown and category manager
+const _origRender = render;
+render = function(){
+  updateFilterCategoryDropdown();
+  updateCategoryManagerUI();
+  _origRender();
+};
+
+function updateCategoryManagerUI(){
+  const list = document.getElementById('catMgrList');
+  list.innerHTML = '';
+  categories.forEach(cat => {
+    const chip = document.createElement('span');
+    chip.className = 'cat-mgr-chip';
+    chip.innerHTML = `${escapeHtml(cat.name)} <button class="del-cat" data-cid="${cat.id}">✕</button>`;
+    chip.querySelector('.del-cat').addEventListener('click', ()=>deleteCategory(cat.id));
+    list.appendChild(chip);
+  });
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* =========================================================
+   MODAL HELPERS
+========================================================= */
+function toggleOverlay(id, show){
+  document.getElementById(id).classList.toggle('open', show);
+}
+</script>
+</body>
+</html>
