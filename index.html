@@ -166,6 +166,10 @@
     display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;
   }
   .filters select, .filters input[type=date]{width:auto; min-width:130px; flex:1 1 130px;}
+  .cat-filter-wrap{flex:1 1 130px; min-width:130px;}
+  .cat-filter-item{display:flex; align-items:center; gap:8px; font-size:.88rem; cursor:pointer; padding:4px 6px; border-radius:8px;}
+  .cat-filter-item:hover{background:var(--surface-2);}
+  .cat-filter-item input{width:auto; accent-color:var(--accent);}
 
   /* ---------- Category Manager ---------- */
   .cat-mgr-toggle{margin-top:8px;}
@@ -433,7 +437,15 @@
     </button>
   </div>
   <div class="filters">
-    <select id="filterCategory"><option value="">সব ক্যাটাগরি</option></select>
+    <div class="cat-filter-wrap" style="position:relative;">
+      <button type="button" class="btn btn-ghost btn-sm" id="catFilterToggle" style="width:100%;">
+        ক্যাটাগরি ফিল্টার <span id="catFilterCount" style="display:none; background:var(--accent); color:#fff; border-radius:10px; padding:1px 7px; font-size:.7rem; margin-left:4px;"></span>
+      </button>
+      <div class="cat-filter-dropdown" id="catFilterDropdown" style="display:none; position:absolute; top:110%; left:0; z-index:30; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:var(--shadow); min-width:200px;">
+        <div id="catFilterList" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="catFilterClear" style="width:100%; margin-top:8px;">সব ক্লিয়ার</button>
+      </div>
+    </div>
     <input type="date" id="filterDate">
     <button class="btn btn-ghost btn-sm" id="clearFilters">রিসেট</button>
   </div>
@@ -610,7 +622,7 @@ let categories = [];
 let selectedCategory = null;
 let editingEntryId = null;
 let editingPersonId = null;
-let currentFilter = { search:'', category:'', date:'' };
+let currentFilter = { search:'', categories:[], date:'' };
 
 /* Collection refs (per-user filtering happens in queries) */
 const categoriesCol = db.collection('categories');
@@ -718,7 +730,7 @@ function liveListen(){
   );
   categoriesCol.where('userId','==',currentUser.uid).onSnapshot(
     snap => { categories = snap.docs.map(d=>({ id:d.id, ...d.data() })); render(); },
-    err => console.error('categories sync error:', err)
+    err => { console.error('categories sync error:', err); showToast('ক্যাটাগরি সিঙ্ক সমস্যা: ' + err.message); }
   );
   personsCol.where('userId','==',currentUser.uid).orderBy('name').onSnapshot(
     snap => { persons = snap.docs.map(d=>({ id:d.id, ...d.data() })); render(); },
@@ -770,20 +782,32 @@ document.getElementById('catMgrAddBtn').addEventListener('click', async ()=>{
   if(!name){ showToast('ক্যাটাগরি নাম লিখুন'); return; }
   if(categories.some(c=>c.name===name)){ showToast('এই ক্যাটাগরি ইতিমধ্যে আছে'); return; }
   try {
-    await categoriesCol.add({ name, userId: currentUser.uid });
+    const ref = await categoriesCol.add({ name, userId: currentUser.uid });
+    categories.push({ id: ref.id, name, userId: currentUser.uid });
     input.value = '';
+    render();
     showToast('ক্যাটাগরি যোগ করা হয়েছে');
-  } catch(err){ showToast('ব্যর্থ হয়েছে'); }
+  } catch(err){
+    console.error('Category add error:', err);
+    showToast('ব্যর্থ হয়েছে: ' + (err.message || 'অজানা সমস্যা'));
+  }
 });
 
 async function deleteCategory(id){
   const inUse = entries.some(e => e.category === getCategoryName(id));
   if(inUse){ showToast('এই ক্যাটাগরি ব্যবহার হচ্ছে, মুছে ফেলা যাবে না'); return; }
   if(!confirm('ক্যাটাগরি ডিলিট করবেন?')) return;
+  const deletedName = getCategoryName(id);
   try {
     await categoriesCol.doc(id).delete();
+    categories = categories.filter(c => c.id !== id);
+    currentFilter.categories = currentFilter.categories.filter(n => n !== deletedName);
+    render();
     showToast('ক্যাটাগরি ডিলিট হয়েছে');
-  } catch(err){ showToast('ব্যর্থ হয়েছে'); }
+  } catch(err){
+    console.error('Category delete error:', err);
+    showToast('ব্যর্থ হয়েছে: ' + (err.message || 'অজানা সমস্যা'));
+  }
 }
 
 /* =========================================================
@@ -822,7 +846,7 @@ function getFiltered(){
     const p = getPersonById(e.personId);
     const name = p ? p.name : '';
     if(currentFilter.search && !name.toLowerCase().includes(currentFilter.search.toLowerCase())) return false;
-    if(currentFilter.category && e.category !== currentFilter.category) return false;
+    if(currentFilter.categories.length > 0 && !currentFilter.categories.includes(e.category)) return false;
     if(currentFilter.date && e.dateTime){
       const d = e.dateTime.slice(0,10);
       if(d !== currentFilter.date) return false;
@@ -1213,19 +1237,30 @@ function bindEvents(){
     currentFilter.search = e.target.value.trim();
     render();
   });
-  document.getElementById('filterCategory').addEventListener('change', e=>{
-    currentFilter.category = e.target.value;
-    render();
-  });
   document.getElementById('filterDate').addEventListener('change', e=>{
     currentFilter.date = e.target.value;
     render();
   });
   document.getElementById('clearFilters').addEventListener('click', ()=>{
-    currentFilter = { search:'', category:'', date:'' };
+    currentFilter = { search:'', categories:[], date:'' };
     document.getElementById('searchInput').value='';
-    document.getElementById('filterCategory').value='';
     document.getElementById('filterDate').value='';
+    updateCategoryFilterUI();
+    updateCatFilterCount();
+    render();
+  });
+  document.getElementById('catFilterToggle').addEventListener('click', ()=>{
+    const dd = document.getElementById('catFilterDropdown');
+    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', e=>{
+    const wrap = document.querySelector('.cat-filter-wrap');
+    if(wrap && !wrap.contains(e.target)) document.getElementById('catFilterDropdown').style.display = 'none';
+  });
+  document.getElementById('catFilterClear').addEventListener('click', ()=>{
+    currentFilter.categories = [];
+    updateCategoryFilterUI();
+    updateCatFilterCount();
     render();
   });
 }
@@ -1233,23 +1268,45 @@ function bindEvents(){
 /* =========================================================
    FILTER DROPDOWN UPDATE (after categories load)
 ========================================================= */
-function updateFilterCategoryDropdown(){
-  const sel = document.getElementById('filterCategory');
-  const currentVal = sel.value;
-  sel.innerHTML = '<option value="">সব ক্যাটাগরি</option>';
+function updateCategoryFilterUI(){
+  const list = document.getElementById('catFilterList');
+  if(!list) return;
+  list.innerHTML = '';
+  if(categories.length === 0){
+    list.innerHTML = '<p style="color:var(--text-muted); font-size:.82rem;">কোনো ক্যাটাগরি নেই</p>';
+    return;
+  }
   categories.forEach(cat => {
-    const opt = document.createElement('option');
-    opt.value = cat.name;
-    opt.textContent = cat.name;
-    sel.appendChild(opt);
+    const label = document.createElement('label');
+    label.className = 'cat-filter-item';
+    const checked = currentFilter.categories.includes(cat.name);
+    label.innerHTML = `<input type="checkbox" value="${escapeHtml(cat.name)}" ${checked?'checked':''}> ${escapeHtml(cat.name)}`;
+    label.querySelector('input').addEventListener('change', e=>{
+      if(e.target.checked){
+        if(!currentFilter.categories.includes(cat.name)) currentFilter.categories.push(cat.name);
+      } else {
+        currentFilter.categories = currentFilter.categories.filter(n=>n!==cat.name);
+      }
+      updateCatFilterCount();
+      render();
+    });
+    list.appendChild(label);
   });
-  sel.value = currentVal;
 }
 
-// Override render to also update dropdown and category manager
+function updateCatFilterCount(){
+  const badge = document.getElementById('catFilterCount');
+  if(!badge) return;
+  const n = currentFilter.categories.length;
+  badge.style.display = n > 0 ? 'inline-block' : 'none';
+  badge.textContent = n;
+}
+
+// Override render to also update the category filter UI and category manager
 const _origRender = render;
 render = function(){
-  updateFilterCategoryDropdown();
+  updateCategoryFilterUI();
+  updateCatFilterCount();
   updateCategoryManagerUI();
   _origRender();
 };
